@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>UniPrep Studio – Full-Stack Skúšková Platforma</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Knižnica pre export výsledkov do PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body { font-family: 'Inter', sans-serif; }
@@ -26,13 +28,13 @@
         </div>
         <div>
           <h1 class="font-bold text-base sm:text-lg tracking-tight">UniPrep <span class="text-indigo-400">Studio</span></h1>
-          <p class="text-xs text-slate-400 hidden sm:block">Bez stresu, s podporou vlastných podkladov</p>
+          <p class="text-xs text-slate-400 hidden sm:block">Prepojené s cloud databázou • Bez stresu</p>
         </div>
       </div>
 
       <div class="flex items-center gap-3">
-        <span id="headerStatusBadge" class="text-xs px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-          Režim: Výber materiálov
+        <span id="serverStatusIndicator" class="text-[11px] px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+          Pripájam k serveru...
         </span>
         <button onclick="resetToSetup()" class="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
           Nový test
@@ -49,13 +51,13 @@
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
         <h2 class="font-semibold text-base text-white mb-2">Vytvoriť test zo súborov</h2>
         <p class="text-xs text-slate-400 mb-4">
-          Zadaj názov predmetu, nahraj akékoľvek študijné materiály (PDF, DOCX, TXT) a systém z nich vygeneruje test.
+          Zadaj názov predmetu, nahraj materiály (PDF, DOCX, TXT) a ulož ich trvalo do databázy.
         </p>
 
         <div class="space-y-3">
           <div>
             <label class="block text-xs font-medium text-slate-300 mb-1">Názov predmetu</label>
-            <input type="text" id="customSubjectNameInput" placeholder="napr. Úvod do ekonómie" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+            <input type="text" id="customSubjectNameInput" placeholder="napr. Štátnice – Informatika" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
           </div>
 
           <div>
@@ -69,12 +71,13 @@
         </div>
       </div>
 
-      <!-- Zoznam predmetov -->
+      <!-- Zoznam uložených predmetov -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-        <h2 class="font-semibold text-base text-white mb-3">Dostupné predmety</h2>
-        <div id="materialsList" class="space-y-3">
-          <!-- Dynamicky naplnené -->
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-base text-white">Uložené predmety</h2>
+          <button onclick="loadSubjectsFromBackend()" class="text-[11px] text-indigo-400 hover:underline">Obnoviť</button>
         </div>
+        <div id="materialsList" class="space-y-3"></div>
       </div>
     </aside>
 
@@ -157,22 +160,27 @@
 
       <!-- 3. OBRAZOVKA: VÝSLEDKY -->
       <div id="resultsScreen" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl fade-in">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
-          <div>
-            <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Výsledkový prehľad</span>
-            <h2 class="text-2xl font-bold mt-1">Skúška dokončená</h2>
-            <p id="resultSummaryText" class="text-sm text-slate-400 mt-1"></p>
+        <div id="pdfExportArea" class="space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+            <div>
+              <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Výsledkový prehľad</span>
+              <h2 id="resultExamTitle" class="text-2xl font-bold mt-1">Skúška dokončená</h2>
+              <p id="resultSummaryText" class="text-sm text-slate-400 mt-1"></p>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-center">
+              <div id="scorePercentage" class="text-3xl font-bold text-indigo-400">0%</div>
+              <div id="scoreGrade" class="text-xs font-medium text-slate-400 mt-1">Úspešnosť</div>
+            </div>
           </div>
-          <div class="bg-slate-950 border border-slate-800 rounded-2xl px-6 py-4 text-center">
-            <div id="scorePercentage" class="text-3xl font-bold text-indigo-400">0%</div>
-            <div id="scoreGrade" class="text-xs font-medium text-slate-400 mt-1">Úspešnosť</div>
-          </div>
+
+          <div id="detailedReviewList" class="space-y-4"></div>
         </div>
 
-        <div id="detailedReviewList" class="space-y-4 my-6 max-h-[500px] overflow-y-auto pr-2"></div>
-
-        <div class="flex flex-wrap gap-3 pt-4 border-t border-slate-800">
-          <button onclick="startExam()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white transition">
+        <div class="flex flex-wrap gap-3 pt-6 mt-6 border-t border-slate-800">
+          <button onclick="downloadResultsPDF()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white transition">
+            📥 Stiahnuť súhrn ako PDF
+          </button>
+          <button onclick="startExam()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-200 transition">
             Zopakovať test
           </button>
           <button onclick="resetToSetup()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sm text-slate-200 transition">
@@ -185,9 +193,15 @@
   </main>
 
   <script>
+    // =========================================================================
+    // TVOJA BACKEND URL ADRESA NA RENDERI
+    // =========================================================================
+    const BACKEND_URL = "https://uniprep-backend-ex2p.onrender.com";
+
+    // Základná záložná databáza (ak server ešte spí - Render Free tier sa uspáva po 15 min)
     const studyDatabase = {
       default_subject: {
-        title: "Algoritmy a dátové štruktúry",
+        title: "Algoritmy a dátové štruktúry (Ukážka)",
         questions: [
           { type: "mcq", question: "Aká je priemerná časová zložitosť algoritmu QuickSort?", options: ["O(n)", "O(n log n)", "O(log n)", "O(n^2)"], correct: "O(n log n)", explanation: "QuickSort využíva metódu rozdeľuj a panuj." },
           { type: "calc", question: "Výpočet: Koľko porovnaní vykoná binárne vyhľadávanie v poli o veľkosti n = 1024?", correct: "10", explanation: "Logaritmus základu 2 z 1024 je 10." },
@@ -195,6 +209,31 @@
         ]
       }
     };
+
+    // Načítanie uložených predmetov priamo z tvojho Render backendu
+    async function loadSubjectsFromBackend() {
+      const indicator = document.getElementById("serverStatusIndicator");
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/tests`);
+        if (response.ok) {
+          const savedTests = await response.json();
+          savedTests.forEach(test => {
+            studyDatabase[`db_${test.id}`] = {
+              title: test.subject,
+              questions: JSON.parse(test.questionsData)
+            };
+          });
+          indicator.textContent = "Server online ✓";
+          indicator.className = "text-[11px] px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        } else {
+          indicator.textContent = "Server prebúdzam...";
+        }
+      } catch (err) {
+        console.warn("Server sa práve prebúdza (Render Free Tier):", err);
+        indicator.textContent = "Lokálny režim (Server spí)";
+      }
+      updateSubjectSelect();
+    }
 
     function updateSubjectSelect() {
       const select = document.getElementById("subjectSelect");
@@ -220,31 +259,40 @@
       });
     }
 
-    function handleFileUpload(event) {
+    // Odoslanie súborov na tvoj Render backend (BACKEND_URL)
+    async function handleFileUpload(event) {
       const files = event.target.files;
       const customName = document.getElementById("customSubjectNameInput").value.trim();
       const statusMsg = document.getElementById("uploadStatusMsg");
 
       if (!files || files.length === 0) return;
-      statusMsg.textContent = `Spracovávam ${files.length} súbor(ov)...`;
+      const subjectTitle = customName !== "" ? customName : `Predmet (${files[0].name})`;
 
-      setTimeout(() => {
-        const title = customName !== "" ? customName : `Vlastný predmet (${files.length} súbory)`;
-        const newKey = "custom_" + Date.now();
-        
-        studyDatabase[newKey] = {
-          title: title,
-          questions: [
-            { type: "mcq", question: `Skúšková otázka z materiálov pre predmet ${title}?`, options: ["Možnosť A", "Možnosť B", "Možnosť C", "Možnosť D"], correct: "Možnosť A", explanation: "Vygenerované z nahratých podkladov." },
-            { type: "calc", question: "Výpočtová úloha na základe nahratých vzorcov (zadaj číselný výsledok):", correct: "100", explanation: "Výpočet zodpovedá vzorcom v skriptách." }
-          ]
-        };
+      statusMsg.textContent = `Odosielam ${files.length} súbor(ov) na server...`;
 
-        updateSubjectSelect();
-        document.getElementById("subjectSelect").value = newKey;
-        document.getElementById("customSubjectNameInput").value = "";
-        statusMsg.textContent = "Súbory úspešne spracované!";
-      }, 1000);
+      const formData = new FormData();
+      formData.append("subjectName", subjectTitle);
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i]);
+      }
+
+      try {
+        const response = await fetch(`${BACKEND_URL}/api/create-test`, {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          statusMsg.textContent = "Úspešne uložené na serveri!";
+          document.getElementById("customSubjectNameInput").value = "";
+          await loadSubjectsFromBackend();
+        } else {
+          statusMsg.textContent = "Chyba pri spracovaní: " + (result.error || "Neznáma chyba");
+        }
+      } catch (err) {
+        statusMsg.textContent = "Server sa ešte štartuje (skús znova o 20 sekúnd).";
+      }
     }
 
     let currentQuestions = [];
@@ -252,6 +300,7 @@
     let userAnswers = {};
     let flaggedQuestions = new Set();
     let studyMode = "exam";
+    let activeSubjectTitle = "";
 
     function startExam() {
       const subjectKey = document.getElementById("subjectSelect").value;
@@ -259,6 +308,7 @@
       studyMode = document.getElementById("studyModeSelect").value;
 
       const subjectData = studyDatabase[subjectKey];
+      activeSubjectTitle = subjectData.title;
       let pool = [...subjectData.questions];
 
       let shuffled = [];
@@ -272,10 +322,7 @@
       userAnswers = {};
       flaggedQuestions.clear();
 
-      document.getElementById("examSubjectTitle").textContent = subjectData.title;
-      document.getElementById("headerStatusBadge").textContent = "Režim: Precvičowanie";
-      document.getElementById("headerStatusBadge").className = "text-xs px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30";
-
+      document.getElementById("examSubjectTitle").textContent = activeSubjectTitle;
       document.getElementById("setupScreen").classList.add("hidden");
       document.getElementById("resultsScreen").classList.add("hidden");
       document.getElementById("examScreen").classList.remove("hidden");
@@ -367,64 +414,4 @@
 
         let style = "bg-slate-800 text-slate-400 border-slate-700";
         if (answered) style = "bg-indigo-600/30 text-indigo-200 border-indigo-500/50";
-        if (flagged) style = "bg-amber-500/20 text-amber-300 border-amber-500/60";
-        if (active) style += " ring-2 ring-white/40";
-
-        dot.className = `w-7 h-7 rounded-lg border text-xs font-medium transition ${style}`;
-        dot.textContent = idx + 1;
-        dots.appendChild(dot);
-      });
-    }
-
-    function prevQuestion() { if (currentIndex > 0) { currentIndex--; renderQuestion(); } }
-    function nextQuestion() { if (currentIndex < currentQuestions.length - 1) { currentIndex++; renderQuestion(); } }
-
-    function checkCorrect(q, ans) {
-      if (!ans) return false;
-      return ans.trim().toLowerCase() === q.correct.trim().toLowerCase();
-    }
-
-    function finishExam() {
-      let correct = 0;
-      const reviewList = document.getElementById("detailedReviewList");
-      reviewList.innerHTML = "";
-
-      currentQuestions.forEach((q, idx) => {
-        const userAns = userAnswers[idx] || "(Bez odpovede)";
-        const isCorrect = checkCorrect(q, userAnswers[idx]);
-        if (isCorrect) correct++;
-
-        const card = document.createElement("div");
-        card.className = `p-4 rounded-xl border ${isCorrect ? "bg-emerald-950/20 border-emerald-500/30" : "bg-rose-950/20 border-rose-500/30"}`;
-        card.innerHTML = `
-          <div class="text-xs font-semibold mb-1 ${isCorrect ? "text-emerald-400" : "text-rose-400"}">Úloha ${idx + 1} • ${isCorrect ? "Splnené" : "Chyba"}</div>
-          <p class="text-sm font-medium text-white mb-2">${q.question}</p>
-          <div class="text-xs space-y-1 text-slate-300">
-            <div>Tvoja odpoveď: <span class="font-semibold">${userAns}</span></div>
-            ${!isCorrect ? `<div>Správne riešenie: <span class="font-semibold text-emerald-300">${q.correct}</span></div>` : ""}
-            <div class="text-slate-400 pt-1">${q.explanation}</div>
-          </div>
-        `;
-        reviewList.appendChild(card);
-      });
-
-      const pct = Math.round((correct / currentQuestions.length) * 100);
-      document.getElementById("scorePercentage").textContent = `${pct}%`;
-      document.getElementById("resultSummaryText").textContent = `Správne vyriešených: ${correct} z ${currentQuestions.length} úloh.`;
-
-      document.getElementById("examScreen").classList.add("hidden");
-      document.getElementById("resultsScreen").classList.remove("hidden");
-    }
-
-    function resetToSetup() {
-      document.getElementById("examScreen").classList.add("hidden");
-      document.getElementById("resultsScreen").classList.add("hidden");
-      document.getElementById("setupScreen").classList.remove("hidden");
-      document.getElementById("headerStatusBadge").textContent = "Režim: Výber materiálov";
-      document.getElementById("headerStatusBadge").className = "text-xs px-3 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700";
-    }
-
-    updateSubjectSelect();
-  </script>
-</body>
-</html>
+        if (flagged) style = "bg-amber-500/20 text-amber-300 border-amber-500/
